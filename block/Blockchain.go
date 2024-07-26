@@ -26,6 +26,7 @@ type Blockchain struct {
 	TransactionPool   []*Transaction `json:"TransactionPool"`
 	Chain             []*Block       `json:"Chain"`
 	BlockchainAddress string         `json:"BlockchainAddress"`
+	Port              uint16
 }
 
 type Transaction struct {
@@ -69,6 +70,7 @@ func (bc *Blockchain) CreateBlock(nonce int, prevHash [32]byte) *Block {
 	return b
 }
 
+// sender = sender address etc.
 func (bc *Blockchain) AddTransaction(sender string, recipient string, value float32,
 	senderPublicKey *ecdsa.PublicKey, s *utils.Signature) bool {
 	t := Transaction{sender, recipient, value}
@@ -79,10 +81,10 @@ func (bc *Blockchain) AddTransaction(sender string, recipient string, value floa
 	}
 
 	if bc.VerifyTransactionSignature(senderPublicKey, s, &t) {
-		if bc.CalculateTotalAmount(sender) < value {
-			log.Println("ERROR: Not enough Balance in wallet")
-			return false;
-		}
+		// if bc.CalculateTotalAmount(sender) < value {
+		// 	log.Println("ERROR: Not enough Balance in wallet")
+		// 	return false
+		// }
 		bc.TransactionPool = append(bc.TransactionPool, &t)
 		return true
 	} else {
@@ -164,11 +166,12 @@ func NewBlock(nonce int, prevHash [32]byte, txns []*Transaction) *Block {
 	}
 }
 
-func NewBlockChain(BlockchainAddress string) *Blockchain {
+func NewBlockChain(BlockchainAddress string, port uint16) *Blockchain {
 	b := new(Block)
 	bc := new(Blockchain)
 	bc.BlockchainAddress = BlockchainAddress
 	bc.CreateBlock(0, b.Hash())
+	bc.Port = port
 	return bc
 }
 

@@ -2,18 +2,18 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 )
 
+// special predefined function
 func init() {
+	//setting prefix for all logs
 	log.SetPrefix("Blockchain: ")
 }
 
 func main() {
 	port := flag.Uint("port", 5000, "TCP Port Number for Blockchain Server")
 	flag.Parse()
-	fmt.Println(port)
 	app := NewBlockchainServer(uint16(*port))
 	app.Run()
 }
