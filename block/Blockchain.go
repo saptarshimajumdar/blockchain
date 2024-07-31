@@ -8,12 +8,16 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 )
 
-const MINING_DIFFICULTY = 3
-const MINING_SENDER = "THE BLOCKCHAIN"
-const MINING_REWARD = 1.0
+const (
+	MINING_DIFFICULTY = 3
+	MINING_SENDER     = "THE BLOCKCHAIN"
+	MINING_REWARD     = 1.0
+	MINING_TIMER_SEC  = 10
+)
 
 type Block struct {
 	Nonce        int            `json:"nonce"`
@@ -27,12 +31,21 @@ type Blockchain struct {
 	Chain             []*Block       `json:"Chain"`
 	BlockchainAddress string         `json:"BlockchainAddress"`
 	Port              uint16
+	mux               sync.Mutex
 }
 
 type Transaction struct {
 	SenderBlockchainAddress    string  `json:"SenderBlockchainAddress"`
 	RecipientBlockchainAddress string  `json:"RecipientBlockchainAddress"`
 	Value                      float32 `json:"Value"`
+}
+
+type TransactionRequest struct {
+	SenderBlockchainAddress    *string  `json:"sender_blockchain_address"`
+	RecipientBlockchainAddress *string  `json:"recipient_blockchain_address"`
+	SenderPublicKey            *string  `json:"sender_public_key"`
+	Value                      *float32 `json:"value"`
+	Signature                  *string  `json:"signature"`
 }
 
 func NewTransaction(sender string, recipient string, value float32) *Transaction {
@@ -44,6 +57,10 @@ func (t *Transaction) PrintTransaction() {
 	fmt.Printf(" sender_blockchain_address      %s\n", t.SenderBlockchainAddress)
 	fmt.Printf(" recipient_blockchain_address   %s\n", t.RecipientBlockchainAddress)
 	fmt.Printf(" value                          %.1f\n", t.Value)
+}
+
+func (bc *Blockchain) GetTransactionPool() []*Transaction {
+	return bc.TransactionPool
 }
 
 func (b *Block) PrintBlock() {
@@ -68,6 +85,13 @@ func (bc *Blockchain) CreateBlock(nonce int, prevHash [32]byte) *Block {
 	bc.Chain = append(bc.Chain, b)
 	bc.TransactionPool = []*Transaction{}
 	return b
+}
+
+func (bc *Blockchain) CreateTransaction(sender string, recipient string, value float32,
+	senderPublicKey *ecdsa.PublicKey, s *utils.Signature) bool {
+	isTransacted := bc.AddTransaction(sender, recipient, value, senderPublicKey, s)
+
+	return isTransacted
 }
 
 // sender = sender address etc.
@@ -132,6 +156,14 @@ func (bc *Blockchain) ProofOfWork() int {
 }
 
 func (bc *Blockchain) Mining() bool {
+
+	bc.mux.Lock()
+	defer bc.mux.Unlock()
+
+	if len(bc.TransactionPool) == 0 {
+		return false
+	}
+
 	//while rewarding the miner there is no transaction
 	bc.AddTransaction(MINING_SENDER, bc.BlockchainAddress, MINING_REWARD, nil, nil)
 	nonce := bc.ProofOfWork()
@@ -139,6 +171,11 @@ func (bc *Blockchain) Mining() bool {
 	bc.CreateBlock(nonce, prevHash)
 	log.Println("action=Mining, status=success")
 	return true
+}
+
+func (bc *Blockchain) StartMining() {
+	bc.Mining()
+	_ = time.AfterFunc(time.Second*MINING_TIMER_SEC, bc.StartMining)
 }
 
 // total transactions for the bcAdress node
@@ -188,15 +225,13 @@ func (b *Block) Hash() [32]byte {
 	return sha256.Sum256([]byte(m))
 }
 
-// func main() {
-// 	bChainAddress := "dummy_address"
-// 	bChain := NewBlockChain(bChainAddress)
-
-// 	bChain.AddTransaction("X", "B", 69.69)
-// 	bChain.Mining()
-// 	bChain.PrintBlockchain()
-
-// 	bChain.AddTransaction("U", "B", 69.69)
-// 	bChain.Mining()
-// 	bChain.PrintBlockchain()
-// }
+func (tr *TransactionRequest) Validate() bool {
+	if tr.SenderBlockchainAddress == nil ||
+		tr.RecipientBlockchainAddress == nil ||
+		tr.SenderPublicKey == nil ||
+		tr.Value == nil ||
+		tr.Signature == nil {
+		return false
+	}
+	return true
+}
